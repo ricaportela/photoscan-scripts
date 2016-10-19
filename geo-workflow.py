@@ -9,15 +9,13 @@ import PhotoScan
 
 ###  project_name, project_folder, folder_images###
 if platform.system() == "Linux":
-    project_name   = 'banquinho'
-    project_folder = "/home/ricardo/temp/"
-    folder_images  = "Photos/"
+    project_name   = 'tenis'
+    project_folder = "/home/ricardo/temp/" + project_name + "/"
+    folder_images  = project_folder + "Photos/"
 else:
     project_name   = 'banquinho'
     project_folder = "C:\\temp3\\"
     folder_images  = "photos\\"
-
-doc_name           = project_name + ".psz"
 
 photos_dir         = os.path.join( project_folder, folder_images )
 photos             = os.listdir(photos_dir)
