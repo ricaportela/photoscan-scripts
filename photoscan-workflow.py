@@ -1,199 +1,412 @@
 # INIT ENVIRONMENT
 # import stuff
 import os
-import sys
+import glob
 import datetime
 import platform
 import PhotoScan
+#import pdb
 
-
-###  project_name, project_folder, folder_images###
+###  project_name, project_folder, photos_dir###
 if platform.system() == "Linux":
-    project_name   = 'banquinho'
-    project_folder = "/home/ricardo/temp/"
-    folder_images  = "photos/"
+    ProjectName = "tenis"
+    HomeDirectory = '/home/ricardo/temp/{0}'.format(ProjectName)
+    PhotosDirectory = "{0}/Photos".format(HomeDirectory)
+    ExportDirectory = "Export"
+
 else:
-    project_name   = 'banquinho'
-    project_folder = "C:\\temp3\\"
-    folder_images  = "photos\\"
-
-doc_name           = project_name + ".psz"
-
-photos_dir         = os.path.join( project_folder, folder_images )
-photos             = os.listdir(photos_dir)
-photos             = [os.path.join(photos_dir,p) for p in photos]
-images_pattern     = photos
+    ProjectName = "tenis"
+    HomeDirectory = "c:\\temp\\tenis"
+    PhotosDirectory = "Photos"
+    ExportDirectory = "Export"
 
 # markers.xml - verify if file exist
-marker_file = project_folder + folder_images + "markers.xml"
+marker_file = PhotosDirectory + "markers.xml"
 print(marker_file)
 
 # file.txt - verify if file exist
-reference_file = project_folder + folder_images + "file.csv"
+reference_file = PhotosDirectory + "file.csv"
 print(reference_file)
 
-def addphotos():
-    print("*** Started...Add Photos *** ", datetime.datetime.utcnow())
-    chunk.label = project_name + "_chunk"
-    chunk.addPhotos(images_pattern)
-    if not doc.save( doc_name ):
-        print( "ERROR: Failed to save project: " + doc_name)
+match_photos_config = {
+    'accuracy': PhotoScan.HighAccuracy,
+    'preselection': PhotoScan.GenericPreselection,
+}
 
-    if os.path.exists(marker_file) == True:
-        print("marker file exist!")
-        chunk.importMarkers(marker_file)
+build_point_cloud_config = {}
 
-    if os.path.exists(reference_file) == True:
-        print("reference file exist!")
-        chunk.loadReference(reference_file, "csv", delimiter=';')
+build_dense_cloud_config = {
+    'quality': PhotoScan.HighQuality
+}
 
-    PhotoScan.app.update()
-    print("*** Finished - Add Photos *** ", datetime.datetime.utcnow())
+build_model_config = {
+    'surface': PhotoScan.Arbitrary,
+    'interpolation': PhotoScan.EnabledInterpolation
+}
 
-def alignphotos():
-    print("*** Started...Align Photos *** ", datetime.datetime.utcnow())
-    chunk.matchPhotos(accuracy=PhotoScan.Accuracy.LowestAccuracy, preselection=PhotoScan.Preselection.GenericPreselection, filter_mask=False, keypoint_limit=40000, tiepoint_limit=10000)
+export_model_config = {
+    'binary': True,
+    'texture_format': "jpg",
+    'texture': True,
+    'normals': True,
+    'colors': True,
+    'cameras': False,
+    'format': "fbx"
+}
+
+build_uv_config = {
+    'mapping': PhotoScan.GenericMapping
+}
+
+build_texture_config = {
+    'blending': PhotoScan.BlendingMode.MosaicBlending,
+    'color_correction': False,
+    'size': 4096
+}
+
+
+#################################################
+
+
+class WorkflowJob(object):
+    def __init__(self, name, precond_func, run_func):
+        self.name = name
+        self.precond_func = precond_func
+        self.run_func = run_func
+
+    def can_run(self, chunk):
+        return self.precond_func(chunk)
+
+    def run(self, chunk):
+        log("Running job: " + self.name)
+        return self.run_func(chunk)
+
+
+#################################################
+# Logging
+
+log_file = None
+
+
+def log(msg):
+    global log_file
+    print(msg)
+    if log_file:
+        log_file.write(str(msg) + '\n')
+        log_file.flush()
+
+
+def open_log(path):
+    global log_file
+    log_file = open(os.path.join(path, 'workflow.log'), 'w')
+
+
+def close_log():
+    global log_file
+    log_file.close()
+
+
+def log_time():
+    log(datetime.datetime.now())
+
+
+#################################################
+# Utility functions
+
+def does_project_exist(project_dir):
+    'Does the PhotoScan project file exist'
+    project_name = make_project_filename(project_dir, "psz")
+    return glob.glob(project_dir + "\\*.psz")
+
+
+def are_cameras_aligned(chunk):
+    'Assume cameras are aligned if at least one of them have been moved.'
+    return len([c for c in chunk.cameras if c.center is not None]) > 0
+
+
+def export_file_exists(project_directory, format):
+    model_name = make_export_filename(project_directory, format)
+    return os.path.isfile(model_name)
+
+
+def is_valid_project_dir(project_dir, photos_dir):
+    "A valid project directory has a photos subdirectory."
+    return photos_dir.upper() in (d.upper() for d in os.listdir(project_dir))
+
+
+def align_cameras(chunk):
+    'Aligns the cameras and returns whether it succeeded or not.'
     chunk.alignCameras()
-    chunk.optimizeCameras()
-    doc.save(doc_name)
-    PhotoScan.app.update()
-    print("*** Finished - Align Photos ***")
+    return are_cameras_aligned(chunk)
 
-def buildensecloud():
-    print("*** Build Dense Cloud - Started ***", datetime.datetime.utcnow())
-    PhotoScan.app.gpu_mask = 1  #GPU devices binary mask
-    if not chunk.dense_cloud:
-       if not chunk.buildDenseCloud(quality=PhotoScan.Quality.LowestQuality, filter=PhotoScan.FilterMode.AggressiveFiltering):
-            print( "ERROR: Could not build dense cloud" )
-            return False
-       else:
-            doc.save(doc_name)
-            PhotoScan.app.update()
+
+def estimate_image_quality(photo):
+    return Photoscan.Utils.estimateImageQuality(photo)
+
+
+def get_export_path(project_dir):
+    dir_name = os.path.basename(project_dir)
+    return os.path.join(project_dir, ExportDirectory)
+
+
+def make_project_filename(project_dir, ext):
+    'Make a filename in the project directory with the given extension'
+    dir_name = os.path.basename(project_dir)
+    return os.path.join(project_dir, dir_name + "." + ext);
+
+
+def make_export_filename(project_dir, ext):
+    "Make a filename in the project's export directory"
+    dir_name = os.path.basename(project_dir)
+    export_path = get_export_path(project_dir)
+    return os.path.join(export_path, dir_name + "." + ext);
+
+
+def export_model(chunk, project_directory, kwargs):
+    model_name = make_export_filename(project_directory, kwargs['format'])
+    return chunk.exportModel(model_name, **kwargs)
+
+
+def export_texture(chunk, project_directory):
+    texture_name = make_export_filename(project_directory, "jpg")
+    return chunk.model.saveTexture(texture_name)
+
+
+#################################################
+# Dumping
+
+def dump_meta(meta, fp):
+    if meta and meta.keys:
+        fp.write("Meta:\n")
+        fp.write(str(meta) + "\n")
+
+
+def dump_camera_data(cam, fp):
+    dump_meta(cam.meta, fp)
+    fp.write("Photo Path: " + cam.photo.path + "\n")
+    fp.write("Center: " + str(cam.center) + "\n")
+
+
+def log_chunk_data(chunk):
+    log("Number of cameras: {}".format(len(chunk.cameras)))
+    log("Cameras are aligned: {}".format(are_cameras_aligned(chunk)))
+    log("Has sparse cloud: {}".format(chunk.point_cloud is not None))
+    log("Has dense cloud: {}".format(chunk.dense_cloud is not None))
+    log("Has model: {}".format(chunk.model is not None))
+
+
+def dump_chunk_data(chunk, fp):
+    fp.write("Number of cameras: {}\n".format(len(chunk.cameras)))
+    fp.write("Cameras are aligned: {}\n".format(are_cameras_aligned(chunk)))
+    fp.write("Has sparse cloud: {}\n".format(chunk.point_cloud is not None))
+    fp.write("Has dense cloud: {}\n".format(chunk.dense_cloud is not None))
+    fp.write("Has model: {}\n".format(chunk.model is not None))
+    fp.write("Camera offset: loc: {} rot: {}\n".format(chunk.camera_offset.location, chunk.camera_offset.rotation))
+    fp.write("Camera accuracy: {}\n".format(chunk.accuracy_cameras))
+    fp.write("Markers accuracy: {}\n".format(chunk.accuracy_markers))
+    fp.write("Projections accuracy: {}\n".format(chunk.accuracy_projections))
+    fp.write("Tie points accuracy: {}\n".format(chunk.accuracy_tiepoints))
+    dump_meta(chunk.meta, fp)
+
+    fp.write("Camera Info:\n")
+    [dump_camera_data(p, fp) for p in chunk.cameras]
+
+
+def dump(doc):
+    'Write information about the PhotoScan.Document to a file'
+    print("Dumping: " + doc.path)
+    fp = open(os.path.join(os.path.dirname(doc.path), 'workflow.txt'), 'w')
+    dump_meta(doc.meta, fp)
+    log_chunk_data(doc.chunk)
+    dump_chunk_data(doc.chunk, fp)
+    fp.close()
+
+
+#################################################
+# Project functions
+
+def find_project_folders(home_dir, photos_dir):
+    'Find all the valid project folders in the home_dir'
+    subdirs = os.listdir(home_dir)
+    subdirs = [os.path.join(home_dir, sd) for sd in subdirs]
+    subdirs = [sd for sd in subdirs if os.path.isdir(sd)]
+    subdirs = [sd for sd in subdirs if is_valid_project_dir(sd, photos_dir)]
+    return subdirs
+
+
+def open_project(project_dir):
+    log("Opening project " + project_dir)
+    project_name = make_project_filename(project_dir, "psz")
+    doc = PhotoScan.Document()
+    if not doc.open(project_name):
+        log("ERROR: Cold not open document: " + project_name)
+    return doc
+
+
+def make_project(project_dir, photos_dir):
+    'Make a new project and add the photos from the photos_dir to it.'
+
+    log("Making project " + project_dir)
+
+    # doc = PhotoScan.Document() # Operate on a new document for batch proecssing
+    doc = PhotoScan.app.document  # Use the current open document in PhotoScan
+
+    # Add the photos to a chunk
+    chunk = doc.addChunk()
+    photos_dir = os.path.join(project_dir, photos_dir)
+    photos = os.listdir(photos_dir)
+    photos = [os.path.join(photos_dir, p) for p in photos]
+    log("Found {} photos in {}".format(len(photos), photos_dir))
+    if not chunk.addPhotos(photos):
+        log("ERROR: Failed to add photos: " + str(photos))
+
+    # Save the new project
+    project_name = make_project_filename(project_dir, "psz")
+    log("Saving: " + project_name);
+    if not doc.save(project_name):
+        log("ERROR: Failed to save project: " + project_name)
+
+    return doc
+
+
+def make_or_open_project(project_dir, photos_dir):
+    if does_project_exist(project_dir):
+        print("testes")
+        return open_project(project_dir)
     else:
-        print( "Dense cloud already exists." )
+        print("chegou aqui")
+        return make_project(project_dir, photos_dir)
 
-    print("*** Finished - Build Dense Cloud *** ", datetime.datetime.utcnow())
 
-def buildmesh():
-    print("*** Build Mesh - Started *** ", datetime.datetime.utcnow())
-    if not chunk.model:
-        if not     chunk.buildModel(surface=PhotoScan.HeightField, source=PhotoScan.DenseCloudData, face_count=PhotoScan.HighFaceCount, interpolation=PhotoScan.EnabledInterpolation):
-            print( "ERROR: Could not build model")
-            return False
+###########################################################################################################
+
+
+def build(project_dir, photos_dir, jobs):
+    log("Building document: " + project_dir)
+    log_time()
+    print("entrou no build")
+    doc = make_or_open_project(project_dir, photos_dir)
+
+    export_path = get_export_path(project_dir)
+    if not os.path.exists(export_path):
+        os.makedirs(export_path)
+
+    chunk = doc.chunk
+
+    if not chunk:
+        log("ERROR: Chunk is None")
+        return False
+
+    if not chunk.enabled:
+        log("Chunk not enabled, skipping")
+
+    # For use by jobs
+    chunk.label = project_dir
+
+    for job in jobs:
+        if job.can_run(chunk):
+            if job.run(chunk):
+                log("Job finished - " + job.name)
+                doc.save()
+            else:
+                log("ERROR: Job failed - " + job.name)
+                return False
         else:
-            doc.save(doc_name)
-    else:
-    	print( "Model already exists" )
-    PhotoScan.app.update()
-    print("*** Build Mesh - Finished *** ", datetime.datetime.utcnow())
+            log("Skipping job " + job.name)
 
-def buildtexture():
-    print("*** Build Texture - Started *** ", datetime.datetime.utcnow())
-    chunk.buildUV(mapping = PhotoScan.GenericMapping, count = 1)
-    chunk.buildTexture(blending = PhotoScan.MosaicBlending, size = 4096)
-    doc.save(doc_name)
-    PhotoScan.app.update()
-    print("*** Build Texture - Finished *** ", datetime.datetime.utcnow())
+    log("Finished building chunk")
+    log_time()
 
-# def buildtiledmodel():
-#     print("Build Tiled Model - Started")
-#     chunk.buildModel(surface = PhotoScan.SurfaceType.Arbitrary, source = PhotoScan.DataSource.DenseCloudData, interpolation = PhotoScan.Interpolation.EnabledInterpolation, face_count = PhotoScan.FaceCount.HighFaceCount)
-#     doc.save(doc_name + ".psz")
-#     PhotoScan.app.update()
-#     print("Build Tiled Model - Finished")
-
-def builddem():
-    print("*** Build DEM - Started *** ", datetime.datetime.utcnow())
-    chunk.buildPoints()
-    chunk.buildDem(source=PhotoScan.DenseCloudData)
-    print("*** Build DEM - Finished *** ", datetime.datetime.utcnow())
-
-def buildOrthomosaic():
-    print("*** Build OrthoMosaic - Started *** ", datetime.datetime.utcnow())
-    chunk.buildOrthomosaic(surface=PhotoScan.DataSource.ModelData,blending=PhotoScan.BlendingMode.MosaicBlending,color_correction=False)
-    print("*** Build OrthoMosaic - Finished *** ", datetime.datetime.utcnow())
-
-def exportaorthomosaic():
-    print("*** Export OrthoMosaic as TIFF files - Started *** ", datetime.datetime.utcnow())
-    chunk.exportOrthomosaic(project_folder + "/Ortho.tif", format="tif")
-    print("*** Export OrthoMosaic as TIFF files - Finished *** ", datetime.datetime.utcnow())
-
-def exportdemtiff():
-    print("*** Export DEM as TIFF files - Started *** ", datetime.datetime.utcnow())
-    chunk.exportDem(project_folder + "/DEM.tif", format="tif") # [, projection ][, region ][, dx ][, dy ][, blockw ][, blockh ], nodata=- (is ok whit licence on windows)
-    print("*** Export DEM as TIFF files - Finished *** ", datetime.datetime.utcnow())
-
-def generatereport():
-    print("*** Generate Report - Started *** ", datetime.datetime.utcnow())
-    chunk.exportReport ( project_folder + project_name + ".pdf" ,  "Relatorio",  "relatorio de geracao do projeto " + project_name)
-    print("*** Generate Report - Finished *** ", datetime.datetime.utcnow())
-
-def main():
-    PhotoScan.app.messageBox("Scripting works! PhotoScan will now close.")
-
-    path_photos = PhotoScan.app.getExistingDirectory("Specify folder with input photos:")
-    path_photos += "/"
-
-	#checking save filename
-    project_path = PhotoScan.app.getSaveFileName("Specify project filename for saving:")
-    if not project_path:
-        print("Script aborted")
-        return 0
-
-    if proejct_path[-4:].lower() != ".psz":
-        project_path += ".psz"
+    return True
 
 
-if __name__ == '__main__':
-    doc = PhotoScan.app.document
-    doc.clear()
+###########################################################################################################
+# Workflow jobs
 
-    main()
-    # chunk = doc.addChunk()
+match_photos_job = WorkflowJob(
+    "Match photos",
+    lambda chunk: not are_cameras_aligned(chunk),
+    lambda chunk: chunk.matchPhotos(**match_photos_config)
+)
 
-    # doc.save(doc_name)
-    # addphotos()
+align_cameras_job = WorkflowJob(
+    "Align Cameras",
+    lambda chunk: not are_cameras_aligned(chunk),
+    lambda chunk: align_cameras(chunk)
+)
 
-    # PhotoScan.app.update()
+build_point_cloud_job = WorkflowJob(
+    "Build point cloud",
+    lambda chunk: not chunk.point_cloud,
+    lambda chunk: chunk.buildPoints(**build_point_cloud_config)
+)
 
-    # alignphotos()
-    # PhotoScan.app.update()
+build_dense_cloud_job = WorkflowJob(
+    "Build dense cloud",
+    lambda chunk: not chunk.dense_cloud,
+    lambda chunk: chunk.buildDenseCloud(**build_dense_cloud_config)
+)
 
-    # buildensecloud()
-    # PhotoScan.app.update()
+build_model_job = WorkflowJob(
+    "Build model",
+    lambda chunk: not chunk.model,
+    lambda chunk: chunk.buildModel(**build_model_config)
+)
 
-    # buildmesh()
-    # PhotoScan.app.update()
+build_uv_job = WorkflowJob(
+    "Build UV",
+    lambda chunk: not chunk.model.texture(),
+    lambda chunk: chunk.buildUV(**build_uv_config)
+)
 
-    # buildtexture()
-    # PhotoScan.app.update()
+build_texture_job = WorkflowJob(
+    "Build texture",
+    lambda chunk: not chunk.model.texture(),
+    lambda chunk: chunk.buildTexture(**build_texture_config)
+)
 
-    # doc_name_psx = project_folder + project_name + ".psx"
-    # doc.save(doc_name_psx)
-    # chunk = doc.chunk
-    # builddem()
-    # PhotoScan.app.update()
+export_model_job = WorkflowJob(
+    "Export model",
+    lambda chunk: chunk.model and not export_file_exists(chunk.label, export_model_config['format']),
+    lambda chunk: export_model(chunk, chunk.label, export_model_config)
+)
 
-    # doc_name_psx = project_folder + project_name + ".psx"
-    # doc.save(doc_name_psx)
-    # chunk = doc.chunk
-    # buildOrthomosaic()
-    # PhotoScan.app.update()
+export_texture_job = WorkflowJob(
+    "Export texture",
+    lambda chunk: chunk.model.texture() and not export_file_exists(chunk.label, export_model_config['texture_format']),
+    lambda chunk: export_texture(chunk, chunk.label)
+)
 
-    # doc_name_psx = project_folder + project_name + ".psx"
-    # doc.save(doc_name_psx)
-    # chunk = doc.chunk
-    # exportdemtiff()
-    # PhotoScan.app.update()
+###########################################################################################################
 
-    # doc_name_psx = project_folder + project_name + ".psx"
-    # doc.save(doc_name_psx)
-    # chunk = doc.chunk
-    # exportaorthomosaic()
-    # PhotoScan.app.update()
+open_log(HomeDirectory)
 
-    # doc_name_psx = project_folder + project_name + ".psx"
-    # doc.save(doc_name_psx)
-    # chunk = doc.chunk
-    # generatereport()
-    # PhotoScan.app.update()
+log("--- Starting workflow ---")
+log("Photoscan version " + PhotoScan.Application().version)
+log("Home directory: " + HomeDirectory+ "/")
+log("Photos directory: " + PhotosDirectory + "/")
+log_time()
+
+project_dirs = find_project_folders(HomeDirectory, PhotosDirectory)
+log("Found {} project directories".format(len(project_dirs)))
+
+log("Making projects")
+
+jobs = (
+    match_photos_job,
+    align_cameras_job,
+    build_point_cloud_job,
+    build_dense_cloud_job,
+    build_model_job,
+    build_uv_job,
+    build_texture_job,
+    export_model_job,
+    export_texture_job
+)
+#pdb.set_trace()
+print("vai chamar o build")
+[build(pd, PhotosDirectory, jobs) for pd in project_dirs]
+
+log_time()
+log("--- Finished workflow ---")
+close_log()
