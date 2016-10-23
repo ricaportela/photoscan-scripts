@@ -83,7 +83,7 @@ venv/
 ENV/
 .venv
 .ideia
-.drafts
+drafts
 
 # Spyder project settings
 .spyderproject

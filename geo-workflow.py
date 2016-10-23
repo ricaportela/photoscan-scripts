@@ -2,41 +2,48 @@
 # import stuff
 import os
 import sys
+import json
 import datetime
 import platform
 import PhotoScan
 
 
-###  project_name, project_folder, folder_images###
-if platform.system() == "Linux":
-    project_name   = 'tenis'
-    project_folder = "/home/ricardo/temp/" + project_name + "/"
-    folder_images  = project_folder + "Photos/"
-else:
-    project_name   = 'banquinho'
-    project_folder = "C:\\temp3\\"
-    folder_images  = "photos\\"
+def loadjson():
+    try:
+        with open(os.path.join(PROJECT_DIR, 'config.json'), 'r') as f:
+            config = json.load(f)
+    except Exception:
+        print("Error Json Invalid")
+        PhotoScan.app.messageBox("Error Json Invalid, Please Correct Json File")
 
-photos_dir         = os.path.join( project_folder, folder_images )
-photos             = os.listdir(photos_dir)
-photos             = [os.path.join(photos_dir,p) for p in photos]
-images_pattern     = photos
-
-# markers.xml - verify if file exist
-marker_file = project_folder + folder_images + "markers.xml"
-print(marker_file)
-
-# file.txt - verify if file exist
-reference_file = project_folder + folder_images + "file.csv"
-print(reference_file)
+    else:
+        print("Json Load!")
+        print("*************************************")
+        print(config["project_name"])
+        print(config["project_folder"])
+        print(config["photos_directory"])
+        print(config["accuracy"])
+        print("*************************************")
 
 def addphotos():
     print("*** Started...Add Photos *** ", datetime.datetime.utcnow())
-    chunk.label = project_name + "_chunk"
-    chunk.addPhotos(images_pattern)
-    if not doc.save( project_name + ".psz" ):
-        print( "ERROR: Failed to save project: " + project_name + ".psz")
+    photos_dir         = os.path.join( project_folder, photos_directory )
+    photos             = os.listdir(photos_dir)
+    photos             = [os.path.join(photos_dir,p) for p in photos]
+    chunk.addPhotos(photos)
 
+    if not doc.save():
+        print( "ERROR: Failed to save project: " + project_name )
+
+    print("*** Finished - Add Photos *** ", datetime.datetime.utcnow())
+
+def alignphotos():
+    print("*** Started...Align Photos *** ", datetime.datetime.utcnow())
+    coord_system = PhotoScan.CoordinateSystem('EPSG::4326')
+    chunk.crs = coord_system
+    #chunk.matchPhotos(accuracy=config['accuracy'], preselection=PhotoScan.Preselection.GenericPreselection, filter_mask=False, keypoint_limit=40000, tiepoint_limit=10000)
+    chunk.matchPhotos(accuracy=PhotoScan.Accuracy.LowestAccuracy, preselection=PhotoScan.Preselection.GenericPreselection, filter_mask=False, keypoint_limit=40000, tiepoint_limit=10000)
+    chunk.alignCameras()
     if os.path.exists(marker_file) == True:
         print("marker file exist!")
         chunk.importMarkers(marker_file)
@@ -45,16 +52,11 @@ def addphotos():
         print("reference file exist!")
         chunk.loadReference(reference_file, "csv", delimiter=';')
 
-    PhotoScan.app.update()
-    print("*** Finished - Add Photos *** ", datetime.datetime.utcnow())
-
-def alignphotos():
-    print("*** Started...Align Photos *** ", datetime.datetime.utcnow())
-    chunk.matchPhotos(accuracy=PhotoScan.Accuracy.LowestAccuracy, preselection=PhotoScan.Preselection.GenericPreselection, filter_mask=False, keypoint_limit=40000, tiepoint_limit=10000)
-    chunk.alignCameras()
     chunk.optimizeCameras()
-    doc.save(project_name + ".psz")
-    PhotoScan.app.update()
+
+    for camera in chunk.cameras:
+        camera.reference.enabled = False
+    chunk.updateTransform()
     print("*** Finished - Align Photos ***")
 
 def buildensecloud():
@@ -65,7 +67,7 @@ def buildensecloud():
             print( "ERROR: Could not build dense cloud" )
             return False
        else:
-            doc.save(project_name + ".psz")
+            doc.save()
             PhotoScan.app.update()
     else:
         print( "Dense cloud already exists." )
@@ -79,18 +81,16 @@ def buildmesh():
             print( "ERROR: Could not build model")
             return False
         else:
-            doc.save(project_name + ".psz")
+            doc.save()
     else:
     	print( "Model already exists" )
-    PhotoScan.app.update()
+
     print("*** Build Mesh - Finished *** ", datetime.datetime.utcnow())
 
 def buildtexture():
     print("*** Build Texture - Started *** ", datetime.datetime.utcnow())
     chunk.buildUV(mapping = PhotoScan.GenericMapping, count = 1)
     chunk.buildTexture(blending = PhotoScan.MosaicBlending, size = 4096)
-    doc.save(project_name + ".psz")
-    PhotoScan.app.update()
     print("*** Build Texture - Finished *** ", datetime.datetime.utcnow())
 
 # def buildtiledmodel():
@@ -113,12 +113,12 @@ def buildOrthomosaic():
 
 def exportaorthomosaic():
     print("*** Export OrthoMosaic as TIFF files - Started *** ", datetime.datetime.utcnow())
-    chunk.exportOrthomosaic(project_folder + "/Ortho.tif", format="tif")
+    chunk.exportOrthomosaic(project_folder + "Export/" + project_name + "_Ortho.tif", format="tif")
     print("*** Export OrthoMosaic as TIFF files - Finished *** ", datetime.datetime.utcnow())
 
 def exportdemtiff():
     print("*** Export DEM as TIFF files - Started *** ", datetime.datetime.utcnow())
-    chunk.exportDem(project_folder + "/DEM.tif", format="tif") # [, projection ][, region ][, dx ][, dy ][, blockw ][, blockh ], nodata=- (is ok whit licence on windows)
+    chunk.exportDem(project_folder + "Export/" + project_name + "_DEM.tif", format="tif") # [, projection ][, region ][, dx ][, dy ][, blockw ][, blockh ], nodata=- (is ok whit licence on windows)
     print("*** Export DEM as TIFF files - Finished *** ", datetime.datetime.utcnow())
 
 def generatereport():
@@ -126,56 +126,71 @@ def generatereport():
     chunk.exportReport ( project_folder + project_name + ".pdf" ,  "Relatorio",  "relatorio de geracao do projeto " + project_name)
     print("*** Generate Report - Finished *** ", datetime.datetime.utcnow())
 
+def are_cameras_aligned(chunk):
+    'Assume cameras are aligned if at least one of them have been moved.'
+    return len([c for c in chunk.cameras if c.center is not None]) > 0
 
-if __name__ == '__main__':
+def main():
+    ###  project_name, project_folder, photos_directory###
+    project_name     = config["project_name"]
+    project_folder   = os.path.join(config["project_folder"])
+    photos_directory  = config["photos_directory"]
+
+    # markers.xml - verify if file exist
+    marker_file = project_folder + photos_directory +  "markers.xml"
+    print("markers = ", marker_file)
+
+    # file.txt - verify if file exist
+    reference_file =  project_folder + photos_directory + "file.csv"
+    print("reference", reference_file)
+
     doc = PhotoScan.app.document
     doc.clear()
-
     chunk = doc.addChunk()
+    chunk.label = project_name + "_chunk"
+    print(project_folder + project_name + ".psx")
+    doc.save(project_folder + project_name + ".psx")
 
-    doc.save(project_name + ".psz")
+    chunk = doc.chunk
+
+    if not chunk:
+        print("ERROR: Chunk is None")
+
     addphotos()
+    if not chunk.enabled:
+        print("Chunk not enabled, skipping")
 
-    PhotoScan.app.update()
+if __name__ == '__main__':
+
+    PROJECT_DIR = os.path.dirname(os.path.realpath(__file__))
+
+    # If an Exception error occurs with Json the PhotoScan will terminated
+    loadjson()
+
+    main()
 
     alignphotos()
-    PhotoScan.app.update()
 
     buildensecloud()
-    PhotoScan.app.update()
 
     buildmesh()
-    PhotoScan.app.update()
 
     buildtexture()
-    PhotoScan.app.update()
 
-    doc_name_psx = project_folder + project_name + ".psx"
-    doc.save(doc_name_psx)
-    chunk = doc.chunk
+    #doc.save(project_folder + project_name + ".psx")
+
     builddem()
-    PhotoScan.app.update()
 
-    doc_name_psx = project_folder + project_name + ".psx"
-    doc.save(doc_name_psx)
-    chunk = doc.chunk
     buildOrthomosaic()
-    PhotoScan.app.update()
 
-    doc_name_psx = project_folder + project_name + ".psx"
-    doc.save(doc_name_psx)
-    chunk = doc.chunk
     exportdemtiff()
-    PhotoScan.app.update()
 
-    doc_name_psx = project_folder + project_name + ".psx"
-    doc.save(doc_name_psx)
-    chunk = doc.chunk
     exportaorthomosaic()
+
+    generatereport()
+
     PhotoScan.app.update()
 
-    doc_name_psx = project_folder + project_name + ".psx"
-    doc.save(doc_name_psx)
-    chunk = doc.chunk
-    generatereport()
-    PhotoScan.app.update()
+    #    app.quit()
+
+    print("Finished building chunk")
