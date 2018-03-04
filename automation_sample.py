@@ -1,41 +1,17 @@
-# INIT ENVIRONMENT
-# import stuff
 import os
 import sys
-# import glob
 import json
 import platform
 import PhotoScan
 import datetime
 
 
-# ###  project_name, project_folder, folder_images###
-# if platform.system() == "Linux":
-#     project_name   = 'banquinho'
-#     project_folder = "/home/ricardo/temp/"
-#     folder_images  = "photos/"
-# else:
-#     project_name   = 'banquinho'
-#     project_folder = "C:\\temp4\\"
-#     folder_images  = "photos\\"
-#
 doc_name           = project_name + ".psz"
-#
 photos_dir         = os.path.join( project_folder, photos_directory )
 photos             = os.listdir(photos_dir)
 photos             = [os.path.join(photos_dir,p) for p in photos]
 images_pattern     = photos
-#
-# # markers.xml - verify if file exist
-# marker_file = project_folder + folder_images + "markers.xml"
-# print(marker_file)
-#
-# # file.txt - verify if file exist
-# reference_file = project_folder + folder_images + "file.csv"
-# print(reference_file)
-
 PROJECT_DIR = os.path.dirname(os.path.realpath(__file__))
-
 with open(os.path.join(PROJECT_DIR, 'config.json'), 'r') as f:
     config = json.load(f)
 
@@ -46,22 +22,19 @@ print(config["photos_directory"])
 print(config["accuracy"])
 print("*************************************")
 
-###  project_name, project_folder, photos_directory###
+´´´  
+project_name, project_folder, photos_directory.
+´´´
 project_name     = config["project_name"]
 project_folder   = os.path.join(config["project_folder"])
 photos_directory  = config["photos_directory"]
-
 doc_name           = project_name + ".psz"
-
 photos_dir         = os.path.join( project_folder, photos_directory )
 photos             = os.listdir(photos_dir)
 photos             = [os.path.join(photos_dir,p) for p in photos]
 images_pattern     = photos
-
-# markers.xml - verify if file exist
 marker_file = project_folder + photos_directory +  "markers.xml"
 print("markers = ", marker_file)
-
 # file.txt - verify if file exist
 reference_file =  project_folder + photos_directory + "file.csv"
 print("reference", reference_file)
