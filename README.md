@@ -14,3 +14,7 @@ The software produces 3D models from geo referenced photos. It is possible to do
 
 Link do Manual em Inglês do PhotoScan
 http://www.agisoft.com/pdf/photoscan_python_api_1_4_1.pdf
+
+Photoscan on Github
+https://github.com/agisoft-llc/photoscan-scripts
+
