@@ -3,7 +3,7 @@
 
 Este script foi desenvolvido com a intenção de otimizar a tarefa de geração de modelos ortomosaico em 3D utilizando o software Photoscan (http://www.agisoft.com/about/). 
 
-O script original foi gentilmente cedido por https://github.com/johnsietsma.
+O script original foi gentilmente cedido por http://johnsietsma.com/.
 Obrigado John!
 
 Seguir o fluxo do Software no menu, porém utilizaremos uma sequência de comandos em Python para fazer isso.
@@ -12,7 +12,7 @@ O software produz modelos 3D a partir de fotos geo referenciadas. É possivel fa
 ## Goal:
 This script was developed with the intention of optimizing the task of generating 3D orthosic models using the Photoscan software (http://www.agisoft.com/about/). 
 
-The original script was given by https://github.com/johnsietsma. 
+The original script was given by http://johnsietsma.com/. 
 Thanks John!
 
 Follow the Software flow in the menu, however we will use a sequence of Python commands to do this.
