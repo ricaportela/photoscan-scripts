@@ -1,4 +1,4 @@
-# PhotoScan Scripts
+# PhotoScan Script - Automation Task
 ## Objetivo:
 
 Este script foi desenvolvido com a intenção de otimizar a tarefa de geração de modelos ortomosaico em 3D utilizando o software Photoscan (http://www.agisoft.com/about/). O script original foi gentilmente cedido por john.sietsma@gmail.com. Obrigado John!
