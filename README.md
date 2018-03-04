@@ -1,11 +1,9 @@
-# PhotoScan Script - Automation Task
+# PhotoScan Scripts
 ## Objetivo:
 
 Este script foi desenvolvido com a intenção de otimizar a tarefa de geração de modelos ortomosaico em 3D utilizando o software Photoscan (http://www.agisoft.com/about/). 
 
-O script original foi gentilmente cedido por john.sietsma@gmail.com.
-https://github.com/johnsietsma
-
+O script original foi gentilmente cedido por https://github.com/johnsietsma.
 Obrigado John!
 
 Seguir o fluxo do Software no menu, porém utilizaremos uma sequência de comandos em Python para fazer isso.
