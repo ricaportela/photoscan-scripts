@@ -10,7 +10,10 @@ Seguir o fluxo do Software no menu, porém utilizaremos uma sequência de comand
 O software produz modelos 3D a partir de fotos geo referenciadas. É possivel fazer isto até mesmo usando um celular.
 
 ## Goal:
-This script was developed with the intention of optimizing the task of generating 3D orthosic models using the Photoscan software (http://www.agisoft.com/about/). The original script was given by john.sietsma@gmail.com. Thanks John!
+This script was developed with the intention of optimizing the task of generating 3D orthosic models using the Photoscan software (http://www.agisoft.com/about/). 
+
+The original script was given by https://github.com/johnsietsma. 
+Thanks John!
 
 Follow the Software flow in the menu, however we will use a sequence of Python commands to do this.
 The software produces 3D models from geo referenced photos. It is possible to do this even using a cell phone.
