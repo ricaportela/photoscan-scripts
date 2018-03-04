@@ -18,7 +18,7 @@ Thanks John!
 Follow the Software flow in the menu, however we will use a sequence of Python commands to do this.
 The software produces 3D models from geo referenced photos. It is possible to do this even using a cell phone.
 
-Link do Manual em Inglês do PhotoScan
+PhotoScan User Manual
 http://www.agisoft.com/pdf/photoscan_python_api_1_4_1.pdf
 
 Photoscan on Github
